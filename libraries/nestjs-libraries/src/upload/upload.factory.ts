@@ -18,6 +18,17 @@ export class UploadFactory {
           process.env.CLOUDFLARE_BUCKETNAME!,
           process.env.CLOUDFLARE_BUCKET_URL!
         );
+      case 's3':
+        return new CloudflareStorage(
+          process.env.CLOUDFLARE_ACCOUNT_ID || '',
+          process.env.S3_ACCESS_KEY!,
+          process.env.S3_SECRET_ACCESS_KEY!,
+          process.env.S3_REGION || 'us-east-1',
+          process.env.S3_BUCKETNAME!,
+          process.env.S3_BUCKET_URL!,
+          process.env.S3_ENDPOINT!,
+          process.env.S3_FORCE_PATH_STYLE !== 'false'
+        );
       default:
         throw new Error(`Invalid storage type ${storageProvider}`);
     }

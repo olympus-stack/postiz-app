@@ -19,15 +19,32 @@ const {
   CLOUDFLARE_SECRET_ACCESS_KEY,
   CLOUDFLARE_BUCKETNAME,
   CLOUDFLARE_BUCKET_URL,
+  S3_ACCESS_KEY,
+  S3_SECRET_ACCESS_KEY,
+  S3_BUCKETNAME,
+  S3_BUCKET_URL,
+  S3_ENDPOINT,
+  S3_REGION,
+  S3_FORCE_PATH_STYLE,
+  STORAGE_PROVIDER,
 } = process.env;
 
+const isS3 = STORAGE_PROVIDER === 's3';
+const uploadBucketName = isS3 ? S3_BUCKETNAME : CLOUDFLARE_BUCKETNAME;
+const uploadBucketUrl = isS3 ? S3_BUCKET_URL : CLOUDFLARE_BUCKET_URL;
+
 const R2 = new S3Client({
-  region: 'auto',
-  endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  region: isS3 ? S3_REGION || 'us-east-1' : 'auto',
+  endpoint: isS3
+    ? S3_ENDPOINT
+    : `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
   credentials: {
-    accessKeyId: CLOUDFLARE_ACCESS_KEY!,
-    secretAccessKey: CLOUDFLARE_SECRET_ACCESS_KEY!,
+    accessKeyId: isS3 ? S3_ACCESS_KEY! : CLOUDFLARE_ACCESS_KEY!,
+    secretAccessKey: isS3
+      ? S3_SECRET_ACCESS_KEY!
+      : CLOUDFLARE_SECRET_ACCESS_KEY!,
   },
+  forcePathStyle: isS3 ? S3_FORCE_PATH_STYLE !== 'false' : false,
 });
 
 // Function to generate a random string
@@ -66,7 +83,7 @@ export async function simpleUpload(
   const randomFilename = generateRandomString() + fileExtension; // Append extension
 
   const params = {
-    Bucket: CLOUDFLARE_BUCKETNAME,
+    Bucket: uploadBucketName,
     Key: randomFilename,
     Body: data,
     ContentType: contentType,
@@ -75,7 +92,7 @@ export async function simpleUpload(
   const command = new PutObjectCommand({ ...params });
   await R2.send(command);
 
-  return CLOUDFLARE_BUCKET_URL + '/' + randomFilename;
+  return uploadBucketUrl + '/' + randomFilename;
 }
 
 export async function createMultipartUpload(req: Request, res: Response) {
@@ -85,7 +102,7 @@ export async function createMultipartUpload(req: Request, res: Response) {
 
   try {
     const params = {
-      Bucket: CLOUDFLARE_BUCKETNAME,
+      Bucket: uploadBucketName,
       Key: `${randomFilename}`,
       ContentType: contentType,
       Metadata: {
@@ -117,7 +134,7 @@ export async function prepareUploadParts(req: Request, res: Response) {
   for (const part of parts) {
     try {
       const params = {
-        Bucket: CLOUDFLARE_BUCKETNAME,
+        Bucket: uploadBucketName,
         Key: partData.key,
         PartNumber: part.number,
         UploadId: partData.uploadId,
@@ -141,7 +158,7 @@ export async function listParts(req: Request, res: Response) {
 
   try {
     const params = {
-      Bucket: CLOUDFLARE_BUCKETNAME,
+      Bucket: uploadBucketName,
       Key: key,
       UploadId: uploadId,
     };
@@ -160,21 +177,21 @@ export async function completeMultipartUpload(req: Request, res: Response) {
 
   try {
     const params = {
-      Bucket: CLOUDFLARE_BUCKETNAME,
+      Bucket: uploadBucketName,
       Key: key,
       UploadId: uploadId,
       MultipartUpload: { Parts: parts },
     };
 
     const command = new CompleteMultipartUploadCommand({
-      Bucket: CLOUDFLARE_BUCKETNAME,
+      Bucket: uploadBucketName,
       Key: key,
       UploadId: uploadId,
       MultipartUpload: { Parts: parts },
     });
     const response = await R2.send(command);
     response.Location =
-      process.env.CLOUDFLARE_BUCKET_URL +
+      uploadBucketUrl +
       '/' +
       response?.Location?.split('/').at(-1);
     return response;
@@ -189,7 +206,7 @@ export async function abortMultipartUpload(req: Request, res: Response) {
 
   try {
     const params = {
-      Bucket: CLOUDFLARE_BUCKETNAME,
+      Bucket: uploadBucketName,
       Key: key,
       UploadId: uploadId,
     };
@@ -208,7 +225,7 @@ export async function signPart(req: Request, res: Response) {
   const partNumber = parseInt(req.body.partNumber);
 
   const params = {
-    Bucket: CLOUDFLARE_BUCKETNAME,
+    Bucket: uploadBucketName,
     Key: key,
     PartNumber: partNumber,
     UploadId: uploadId,

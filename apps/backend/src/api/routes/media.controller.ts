@@ -111,10 +111,15 @@ export class MediaController {
     if (!name) {
       return false;
     }
+    const uploadBaseUrl =
+      process.env.STORAGE_PROVIDER === 's3'
+        ? process.env.S3_BUCKET_URL
+        : process.env.CLOUDFLARE_BUCKET_URL;
+
     return this._mediaService.saveFile(
       org.id,
       name,
-      process.env.CLOUDFLARE_BUCKET_URL + '/' + name,
+      uploadBaseUrl + '/' + name,
       originalName || undefined
     );
   }
